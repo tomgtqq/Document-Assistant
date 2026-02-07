@@ -17,8 +17,11 @@ class DocumentChunk(BaseModel):
 # Refer to README.md Task 1.1 for detailed field requirements.
 class AnswerResponse(BaseModel):
     """Structured response for Q&A tasks - TO BE IMPLEMENTED"""
-    pass
-
+    question: str = Field(description="The original question")
+    answer: str = Field(description="The generated answer")
+    sources: List[str] = Field(default_factory=lambda: list, description="List of document IDs used to generate the answer")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence score for the answer (0.0 to 1.0)")
+    timestamp: datetime = Field(default_factory=datetime.now, description="Time when When the response was generated")
 
 
 class SummarizationResponse(BaseModel):
@@ -45,12 +48,11 @@ class UpdateMemoryResponse(BaseModel):
     document_ids: List[str] = Field(default_factory=lambda: list, description="List of documents ids that are relevant to the users last message")
 
 
-# TODO: Implement the UserIntent schema for intent classification.
-# This schema should include fields for intent_type, confidence, and reasoning.
-# Refer to README.md Task 1.2 for detailed field requirements.
 class UserIntent(BaseModel):
     """User intent classification - TO BE IMPLEMENTED"""
-    pass
+    intent_type: Literal["qa", "summarization", "calculation", "unknown"] = Field(description="The classified intent type")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence score for the intent classification (0.0 to 1.0)")
+    reasoning: str = Field(description="Explanation of how the intent was determined")
 
 
 class SessionState(BaseModel):

@@ -16,10 +16,6 @@ from schemas import (
 from prompts import get_intent_classification_prompt, get_chat_prompt_template, MEMORY_SUMMARY_PROMPT
 
 
-# TODO: The AgentState class is already implemented for you.  Study the
-# structure to understand how state flows through the LangGraph
-# workflow.  See README.md Task 2.1 for detailed explanations of
-# each property.
 class AgentState(TypedDict):
     """
     The agent state object
@@ -44,8 +40,8 @@ class AgentState(TypedDict):
     session_id: Optional[str]
     user_id: Optional[str]
 
-    # TODO: Modify actions_taken to use an operator.add reducer
-    actions_taken: Annotated[List[str]]
+    # List of agent nodes executed 
+    actions_taken: Annotated[List[str], operator.add]
 
 
 def invoke_react_agent(response_schema: type[BaseModel], messages: List[BaseMessage], llm, tools) -> (
@@ -66,9 +62,6 @@ Dict[str, Any], List[str]):
     return result, tools_used
 
 
-# TODO: Implement the classify_intent function.
-# This function should classify the user's intent and set the next step in the workflow.
-# Refer to README.md Task 2.2
 def classify_intent(state: AgentState, config: RunnableConfig) -> AgentState:
     """
     Classify user intent and update next_step. Also records that this
@@ -77,18 +70,33 @@ def classify_intent(state: AgentState, config: RunnableConfig) -> AgentState:
 
     llm = config.get("configurable").get("llm")
     history = state.get("messages", [])
+    user_input = state.get("user_input", "")
 
-    # TODO Configure the llm chat model for structured output
+    # Configure the llm chat model for structured output
+    structured_llm = llm.with_structured_output(UserIntent)
 
-    # TODO Create a formatted prompt with conversation history and user input
+    # Create a formatted prompt with conversation history and user input
+    conversation_history = "\n".join([f"{type(m).__name__}: {m.content}" for m in history])
+    prompt = get_intent_classification_prompt().format({
+        "input": user_input,
+        "conversation_history": conversation_history if conversation_history else "No prior conversation",
+    })
+ 
+    # Invoke the LLM to classify intent
+    intent = structured_llm.invoke(prompt)
 
-    next_step = "qa"
-
-    # TODO: Add conditional logic to set next_step based on intent
+    # Set next_step based on intent
+    if intent.intent_type == "qa":
+        next_step = "qa_agent"
+    elif intent.intent_type == "summarization":
+        next_step = "summarization_agent"
+    elif intent.intent_type == "calculation":
+        next_step = "calculation_agent"   
 
     return {
         "actions_taken": ["classify_intent"],
-        # TODO: Update state intent and next_step
+        "intent": intent,
+        "next_step": next_step,
     }
 
 
