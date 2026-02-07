@@ -60,23 +60,34 @@ Guidelines:
 4. Focus on actionable information
 """
 
-# Calculation System Prompt
-# TODO: Implement the CALCULATION_SYSTEM_PROMPT. Refer to README.md Task 3.2 for details
-CALCULATION_SYSTEM_PROMPT = """"""
+
+CALCULATION_SYSTEM_PROMPT = """"
+You are a calculation agent specializing in financial and healthcare documents.
+
+Your approach:
+- Determine the relevant document to retrieve based on user input
+- Use the document reader tool to access the necessary document
+- Identify the mathematical expression to calculate from the user's input
+- Utilize the calculator tool for all calculations, regardless of complexity
+
+Guidelines:
+1. Always retrieve the relevant document before performing calculations
+2. Clearly state the mathematical expression being calculated
+3. Use the calculator tool for all calculations, no matter how simple
+4. Provide accurate results and cite the source document
+"""
 
 
-# TODO: Finish the function to return the correct prompt based on intent type
-# Refer to README.md Task 3.1 for details
 def get_chat_prompt_template(intent_type: str) -> ChatPromptTemplate:
     """
     Get the appropriate chat prompt template based on intent.
     """
     if intent_type == "qa":
         system_prompt = QA_SYSTEM_PROMPT
-    elif intent_type ==  # TODO:  Check the intent type value
-        system_prompt =  # TODO: Set system prompt to the correct value based on intent type
-    elif intent_type ==  # TODO: Check the intent type value
-    # TODO: Set system prompt to the correct value based on intent type
+    elif intent_type == "summarization":
+        system_prompt = SUMMARIZATION_SYSTEM_PROMPT
+    elif intent_type == "calculation": 
+        system_prompt = CALCULATION_SYSTEM_PROMPT  
     else:
         system_prompt = QA_SYSTEM_PROMPT  # Default fallback
 

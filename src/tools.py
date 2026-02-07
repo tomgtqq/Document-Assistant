@@ -58,16 +58,83 @@ class ToolLogger:
         with open(filepath, 'w') as f:
             json.dump(self.logs, f, indent=2)
 
-
-# TODO: Implement the calculator tool using the @tool decorator.
-# This tool should safely evaluate mathematical expressions and log its usage.
-# Refer to README.md Task 4.1 for detailed implementation requirements.
 def create_calculator_tool(logger: ToolLogger):
     """
     Creates a calculator tool - TO BE IMPLEMENTED
     """
-    # Your implementation here
-    pass
+    @tool
+    def calculator(expression: str) -> str:
+        """
+        Safely evaluate mathematical expressions.
+        
+        Args:
+            expression: A mathematical expression (e.g., "2 + 2", "10 * 5", "sqrt(16)")
+        
+        Returns:
+            The result of the calculation or an error message
+        """
+        try:
+            MAX_EXPRESSION_LENGTH = 200  # Limit expression length to prevent abuse
+            if len(expression) > MAX_EXPRESSION_LENGTH:
+                error_msg = f"Expression is too long. Maximum length is {MAX_EXPRESSION_LENGTH} characters."
+                logger.log_tool_use("calculator", {"expression": expression}, {"error": error_msg})
+                return error_msg
+            
+            #Validate expression is not empty
+            if not expression.strip():
+                error_msg = "Expression is empty. Please provide a valid mathematical expression."
+                logger.log_tool_use("calculator", {"expression": expression}, {"error": error_msg})
+                return error_msg
+            
+            # Validate expression for safety - only allow specific characters
+            allowed_chars = set('0123456789+-*/.() ')
+            if not all(c in allowed_chars for c in expression):
+                error_msg = "Expression contains invalid characters. Only basic math operations allowed."
+                logger.log_tool_use("calculator", {"expression": expression}, {"error": error_msg})
+                return error_msg
+            
+            # Prevent dangerous operations
+            dangerous_keywords = ['import', '__', 'eval', 'exec', 'open', 'input']
+            if any(keyword in expression.lower() for keyword in dangerous_keywords):
+                error_msg = "Expression contains forbidden operations."
+                logger.log_tool_use("calculator", {"expression": expression}, {"error": error_msg})
+                return error_msg
+            
+            # Additional security: Reject if contains letters or underscores
+            if re.search(r'[a-zA-Z_]', expression):
+                error_msg = "Expression contains letters or underscores, which are not allowed."
+                logger.log_tool_use("calculator", {"expression": expression}, {"error": error_msg})
+                return error_msg
+            
+            # Evaluate the expression
+            result = eval(expression)
+            
+            # Format the result
+            result = f"{result:.6f}" if isinstance(result, float) else result
+
+            # Log successful calculation
+            logger.log_tool_use(
+                "calculator",
+                {"expression": expression},
+                {"result": result}
+            )
+            
+            return f"Result: {expression} = {result}"
+            
+        except ZeroDivisionError:
+            error_msg = "Error: Division by zero is not allowed."
+            logger.log_tool_use("calculator", {"expression": expression}, {"error": error_msg})
+            return error_msg
+        except SyntaxError:
+            error_msg = "Error: Invalid mathematical expression syntax."
+            logger.log_tool_use("calculator", {"expression": expression}, {"error": error_msg})
+            return error_msg
+        except Exception as e:
+            error_msg = f"Calculation error: {str(e)}"
+            logger.log_tool_use("calculator", {"expression": expression}, {"error": error_msg})
+            return error_msg
+    
+    return calculator
 
 
 def create_document_search_tool(retriever, logger: ToolLogger):
