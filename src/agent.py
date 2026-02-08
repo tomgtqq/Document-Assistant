@@ -14,6 +14,7 @@ from schemas import (
     AnswerResponse, SummarizationResponse, CalculationResponse, UpdateMemoryResponse
 )
 from prompts import get_intent_classification_prompt, get_chat_prompt_template, MEMORY_SUMMARY_PROMPT
+from langgraph.checkpoint.memory import InMemorySaver
 
 
 class AgentState(TypedDict):
@@ -77,23 +78,23 @@ def classify_intent(state: AgentState, config: RunnableConfig) -> AgentState:
 
     # Create a formatted prompt with conversation history and user input
     conversation_history = "\n".join([f"{type(m).__name__}: {m.content}" for m in history])
-    prompt = get_intent_classification_prompt().format({
-        "input": user_input,
-        "conversation_history": conversation_history if conversation_history else "No prior conversation",
-    })
+    prompt = get_intent_classification_prompt().format(
+        user_input=user_input,
+        conversation_history=conversation_history if conversation_history else "No prior conversation"
+    )
  
     # Invoke the LLM to classify intent
     intent = structured_llm.invoke(prompt)
 
     # Set next_step based on intent
     if intent.intent_type == "qa":
-        next_step = "qa_agent"
+        next_step = "qa"
     elif intent.intent_type == "summarization":
-        next_step = "summarization_agent"
+        next_step = "summarization"
     elif intent.intent_type == "calculation":
-        next_step = "calculation_agent"
+        next_step = "calculation"
     else:
-        next_step = "qa_agent" # Default to QA agent if intent is unclear 
+        next_step = "qa"  # Default to QA agent if intent is unclear 
 
     return {
         "actions_taken": ["classify_intent"],
@@ -181,16 +182,13 @@ def update_memory(state: AgentState, config: RunnableConfig) -> AgentState:
     """
 
     llm = config.get("configurable").get("llm")
-
     prompt_with_history = ChatPromptTemplate.from_messages([
         SystemMessagePromptTemplate.from_template(MEMORY_SUMMARY_PROMPT),
         MessagesPlaceholder("chat_history"),
     ]).invoke({
         "chat_history": state.get("messages", []),
     })
-
     structured_llm = llm.with_structured_output(UpdateMemoryResponse)
-
     response = structured_llm.invoke(prompt_with_history)
     return {
         "conversation_summary": response.summary,
@@ -199,41 +197,42 @@ def update_memory(state: AgentState, config: RunnableConfig) -> AgentState:
         "actions_taken": ["update_memory"]
     }
 
-    def should_continue(state: AgentState) -> str:
-        """Router function"""
-        return state.get("next_step", "end")
 
-    
-    def create_workflow(llm, tools):
-        """
-        Creates the LangGraph agents.
-        Compiles the workflow with an InMemorySaver checkpointer to persist state.
-        """
-        workflow = StateGraph(AgentState)
-
-        workflow.add_node("classify_intent", classify_intent)
-        workflow.add_node("qa_agent", qa_agent)
-        workflow.add_node("summarization_agent", summarization_agent)
-        workflow.add_node("calculation_agent", calculation_agent)
-        workflow.add_node("update_memory", update_memory)
+def should_continue(state: AgentState) -> str:
+    """Router function"""
+    return state.get("next_step", "end")
 
 
-        workflow.set_entry_point("classify_intent")
-        workflow.add_conditional_edges(
-            "classify_intent",
-            should_continue,
-            {
-                "qa": "qa_agent",
-                "summarization": "summarization_agent",
-                "calculation": "calculation_agent",
-                "end": END
-            }
-        )
+def create_workflow(llm, tools):
+    """
+    Creates the LangGraph agents.
+    Compiles the workflow with an InMemorySaver checkpointer to persist state.
+    """
+    workflow = StateGraph(AgentState)
 
-        workflow.add_edge("qa_agent", "update_memory")
-        workflow.add_edge("summarization_agent", "update_memory")
-        workflow.add_edge("calculation_agent", "update_memory")
-        workflow.add_edge("update_memory", END)
+    workflow.add_node("classify_intent", classify_intent)
+    workflow.add_node("qa_agent", qa_agent)
+    workflow.add_node("summarization_agent", summarization_agent)
+    workflow.add_node("calculation_agent", calculation_agent)
+    workflow.add_node("update_memory", update_memory)
 
-       
-        return workflow.compile(checkpointer=InMemorySaver())
+
+    workflow.set_entry_point("classify_intent")
+    workflow.add_conditional_edges(
+        "classify_intent",
+        should_continue,
+        {
+            "qa": "qa_agent",
+            "summarization": "summarization_agent",
+            "calculation": "calculation_agent",
+            "end": END
+        }
+    )
+
+    workflow.add_edge("qa_agent", "update_memory")
+    workflow.add_edge("summarization_agent", "update_memory")
+    workflow.add_edge("calculation_agent", "update_memory")
+    workflow.add_edge("update_memory", END)
+
+   
+    return workflow.compile(checkpointer=InMemorySaver())
